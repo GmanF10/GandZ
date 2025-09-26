@@ -1,0 +1,2377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ZENØ — Living Polyhedron System</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    html, body { 
+      height: 100%; 
+      overflow: hidden; 
+      background: #0a0a0f;
+    }
+    
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    
+    #app { 
+      position: fixed; 
+      inset: 0;
+    }
+    
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      opacity: 0.5;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.7; }
+    }
+    
+    /* Status Panel */
+    .status {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-family: monospace;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+      text-align: right;
+      line-height: 1.6;
+      pointer-events: none;
+      user-select: none;
+    }
+    
+    .status-line {
+      transition: color 0.3s ease;
+    }
+    .status-line.active { color: #0f9; }
+    .status-line.warning { color: #f90; }
+    .status-line.danger { color: #f44; }
+    
+    /* Legend Panel */
+    .legend {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 14px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      will-change: transform;
+      contain: layout style paint;
+      user-select: none;
+    }
+    
+    .legend:hover {
+      background: rgba(0, 0, 0, 0.8);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+    
+    .legend.collapsed {
+      padding: 10px 12px;
+    }
+    
+    .legend.collapsed .legend-items {
+      display: none;
+    }
+    
+    .legend-title {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .legend.collapsed .legend-title {
+      margin-bottom: 0;
+    }
+    
+    .legend-arrow {
+      font-size: 10px;
+      opacity: 0.5;
+      transition: transform 0.3s ease;
+    }
+    
+    .legend.collapsed .legend-arrow {
+      transform: rotate(-90deg);
+    }
+    
+    .legend-items {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.8);
+      transition: transform 0.2s ease;
+    }
+    
+    .legend-item:hover {
+      transform: translateX(2px);
+      color: rgba(255, 255, 255, 1);
+    }
+    
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      position: relative;
+    }
+    
+    .legend-color.solid {
+      background: var(--color);
+      box-shadow: 0 0 8px var(--color);
+    }
+    
+    .legend-color.wireframe {
+      background: transparent;
+      border: 2px solid var(--color);
+      box-shadow: inset 0 0 4px var(--color);
+    }
+    
+    /* Controls Help */
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.4);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      pointer-events: none;
+      user-select: none;
+    }
+    
+    /* Performance Monitor */
+    .perf-monitor {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      font-family: monospace;
+      font-size: 10px;
+      color: #0f9;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 8px 10px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 255, 153, 0.2);
+      display: none;
+      user-select: none;
+    }
+    .perf-monitor.visible { 
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* WebGL Info */
+    .webgl-info {
+      position: absolute;
+      bottom: 60px;
+      right: 20px;
+      font-family: monospace;
+      font-size: 9px;
+      color: rgba(255, 255, 255, 0.3);
+      user-select: none;
+    }
+    
+    /* Error State */
+    .error-message {
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 14px;
+    }
+    
+    .error-message small {
+      opacity: 0.6;
+      font-size: 12px;
+      display: block;
+      margin-top: 10px;
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .controls { display: none; }
+      .legend { 
+        font-size: 10px;
+        top: 10px;
+        left: 10px;
+      }
+      .status {
+        font-size: 10px;
+        top: 10px;
+        right: 10px;
+      }
+      .webgl-info { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loading">Initializing System</div>
+  </div>
+
+  <div class="status">
+    <div class="status-line" id="state">SYSTEM: INITIALIZING</div>
+    <div class="status-line" id="integrity">INTEGRITY: 100%</div>
+    <div class="status-line" id="sync">SYNC: 100%</div>
+  </div>
+
+  <div class="legend" id="legend" style="display: none;">
+    <div class="legend-title">
+      ZENØ v2.0
+      <span class="legend-arrow">▼</span>
+    </div>
+    <div class="legend-items">
+      <div class="legend-item">
+        <div class="legend-color solid" style="--color: #00FF88;"></div>
+        <span>Codex Prime</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color wireframe" style="--color: #FF0066;"></div>
+        <span>Core Spine</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color wireframe" style="--color: #00FFFF;"></div>
+        <span>Immune Layer</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color wireframe" style="--color: #FFAA00;"></div>
+        <span>Control Layer</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color wireframe" style="--color: #AA00FF;"></div>
+        <span>Gates (Perimeter)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    Space: Pause • R: Reset • P: Performance • B: Bloom • S: Shaders • I: Intensity • 1-3: States
+  </div>
+
+  <div class="perf-monitor" id="perfMonitor">
+    <div>FPS: <span id="fps">0</span></div>
+    <div>Calls: <span id="calls">0</span></div>
+    <div>Triangles: <span id="tris">0</span></div>
+    <div>Memory: <span id="memory">0</span> MB</div>
+    <div><span id="webgl-version">WebGL</span></div>
+  </div>
+
+  <div class="webgl-info" id="webglInfo"></div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/",
+        "three/examples/jsm/postprocessing/EffectComposer.js": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/postprocessing/EffectComposer.js",
+        "three/examples/jsm/postprocessing/RenderPass.js": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/postprocessing/RenderPass.js",
+        "three/examples/jsm/postprocessing/UnrealBloomPass.js": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/postprocessing/UnrealBloomPass.js",
+        "three/examples/jsm/postprocessing/OutputPass.js": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/postprocessing/OutputPass.js",
+        "three/examples/jsm/postprocessing/ShaderPass.js": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/postprocessing/ShaderPass.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    
+    // Post-processing imports (Phase 2)
+    import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+    import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+    import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+    
+    'use strict';
+
+    // ==========================================
+    // Configuration - Centralized Settings
+    // ==========================================
+    const CONFIG = {
+      // Camera Configuration
+      camera: {
+        position: [5, 3, 5],
+        fov: 45,
+        near: 0.1,
+        far: 50
+      },
+      
+      // Orbit Controls
+      controls: {
+        enableDamping: true,
+        dampingFactor: 0.05,
+        autoRotateSpeed: 0.3,
+        minDistance: 3,
+        maxDistance: 10,
+        enablePan: false
+      },
+      
+      // Layer Definitions - Vibrant Neon Colors
+      layers: [
+        { 
+          type: 'solid',
+          scale: 0.6,
+          color: 0x00FF88,
+          name: 'Codex Prime',
+          complexity: 3  // Icosahedron detail level
+        },
+        { 
+          type: 'wireframe',
+          scale: 1.1,
+          color: 0xFF0066,
+          name: 'Core Spine',
+          complexity: 2
+        },
+        { 
+          type: 'wireframe',
+          scale: 1.6,
+          color: 0x00FFFF,
+          name: 'Immune Layer',
+          complexity: 2
+        },
+        { 
+          type: 'wireframe',
+          scale: 2.1,
+          color: 0xFFAA00,
+          name: 'Control Layer',
+          complexity: 2
+        },
+        { 
+          type: 'wireframe',
+          scale: 2.6,
+          color: 0xAA00FF,
+          name: 'Gates',
+          complexity: 2
+        }
+      ],
+      
+      // Animation Parameters
+      animation: {
+        rotationSpeed: 0.001,
+        breathingSpeed: 0.003,
+        breathingAmount: 0.02,
+        pulseSpeed: 0.02,
+        pulseIntensity: 0.1,
+        opacityRange: { min: 0.3, max: 0.6 },  // Reduced for better clarity
+        vertexPulseSpeed: 3,
+        vertexPulseAmount: 0.01
+      },
+      
+      // Visual Effects
+      effects: {
+        vertexPointSize: 0.015,  // Reduced from 0.03 for less clutter
+        rimGlowIntensity: 0.1,
+        rimGlowScale: 1.05,
+        edgeThreshold: 30
+      },
+      
+      // Lighting Configuration
+      lighting: {
+        ambient: { 
+          color: 0xffffff,
+          intensity: 0.4
+        },
+        main: { 
+          color: 0xffffff,
+          intensity: 0.6,
+          position: [5, 5, 5]
+        },
+        rim: { 
+          color: 0x0088ff,
+          intensity: 0.2,
+          position: [-5, -5, -5]
+        }
+      },
+      
+      // Material Properties
+      material: {
+        core: { 
+          metalness: 0.3,
+          roughness: 0.4,
+          clearcoat: 0.1,
+          clearcoatRoughness: 0.4,
+          emissiveIntensity: 0.2
+        },
+        wireframe: { 
+          opacity: 0.4,  // Reduced from 0.8 for better clarity
+          linewidth: 1
+        },
+        wireframeDefensive: { 
+          opacity: 0.9
+        }
+      },
+      
+      // Performance Settings
+      performance: {
+        maxPixelRatio: 2,
+        mobilePixelRatio: 1,
+        shadowsEnabled: false,
+        logarithmicDepthBuffer: false,
+        antialiasThreshold: 768  // Disable AA below this width
+      },
+      
+      // Visual Effects Configuration (Phase 1 - All Disabled)
+      visualEffects: {
+        bloom: { 
+          enabled: false, 
+          intensity: 0.8,   // Reduced from 1.5 for better clarity
+          radius: 0.2,      // Reduced from 0.4 for tighter glow
+          threshold: 0.9,
+          layers: [3, 4]  // Which layers get bloom (outer two by default)
+        },
+        chromatic: { 
+          enabled: false, 
+          offset: 0.002,
+          radialModulation: true
+        },
+        vignette: { 
+          enabled: false, 
+          darkness: 0.4,
+          offset: 0.5
+        },
+        customShaders: { 
+          enabled: false,
+          energyField: true,  // Available and implemented
+          holographic: false,
+          fresnel: false
+        },
+        filmGrain: {
+          enabled: false,
+          intensity: 0.05
+        },
+        qualityPreset: 'medium',  // low, medium, high, ultra
+        autoAdjust: true  // Auto-disable effects if FPS drops
+      },
+      
+      // UI Update Intervals
+      ui: {
+        statusUpdateInterval: 100,
+        perfUpdateInterval: 1000
+      }
+    };
+
+    // ==========================================
+    // Utility Functions
+    // ==========================================
+    const Utils = {
+      /**
+       * Detect if running on mobile device
+       */
+      isMobile() {
+        return /Android|webOS|iPhone|iPad/i.test(navigator.userAgent);
+      },
+      
+      /**
+       * Detect if running on Apple device
+       */
+      isApple() {
+        return /iPhone|iPad|Mac/i.test(navigator.userAgent);
+      },
+      
+      /**
+       * Detect WebGL version
+       */
+      detectWebGLVersion(renderer) {
+        return renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1';
+      },
+      
+      /**
+       * Clamp value between min and max
+       */
+      clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      },
+      
+      /**
+       * Linear interpolation
+       */
+      lerp(start, end, amount) {
+        return start + (end - start) * amount;
+      },
+      
+      /**
+       * Map value from one range to another
+       */
+      map(value, inMin, inMax, outMin, outMax) {
+        return outMin + (outMax - outMin) * ((value - inMin) / (inMax - inMin));
+      }
+    };
+
+    // ==========================================
+    // Performance Monitor
+    // ==========================================
+    class PerformanceMonitor {
+      constructor() {
+        this.fps = 0;
+        this.frames = 0;
+        this.lastTime = performance.now();
+        this.visible = false;
+        this.element = document.getElementById('perfMonitor');
+        this.fpsHistory = [];
+        this.maxHistorySize = 60;
+      }
+
+      /**
+       * Update performance metrics
+       */
+      update(renderer) {
+        this.frames++;
+        const currentTime = performance.now();
+        const delta = currentTime - this.lastTime;
+        
+        if (delta >= CONFIG.ui.perfUpdateInterval) {
+          this.fps = Math.round((this.frames * 1000) / delta);
+          this.frames = 0;
+          this.lastTime = currentTime;
+          
+          // Track FPS history
+          this.fpsHistory.push(this.fps);
+          if (this.fpsHistory.length > this.maxHistorySize) {
+            this.fpsHistory.shift();
+          }
+          
+          if (this.visible && renderer.info) {
+            this.updateDisplay(renderer.info);
+          }
+        }
+      }
+      
+      /**
+       * Update UI display
+       */
+      updateDisplay(info) {
+        document.getElementById('fps').textContent = this.fps;
+        document.getElementById('calls').textContent = info.render.calls;
+        document.getElementById('tris').textContent = info.render.triangles.toLocaleString();
+        
+        if (info.memory) {
+          const memory = info.memory.textures + info.memory.geometries;
+          document.getElementById('memory').textContent = (memory / 1024 / 1024).toFixed(1);
+        }
+      }
+      
+      /**
+       * Get average FPS
+       */
+      getAverageFPS() {
+        if (this.fpsHistory.length === 0) return 0;
+        const sum = this.fpsHistory.reduce((a, b) => a + b, 0);
+        return Math.round(sum / this.fpsHistory.length);
+      }
+      
+      /**
+       * Toggle visibility
+       */
+      toggle() {
+        this.visible = !this.visible;
+        this.element.classList.toggle('visible', this.visible);
+        return this.visible;
+      }
+    }
+
+    // ==========================================
+    // System State Manager
+    // ==========================================
+    class SystemStateManager {
+      constructor() {
+        this.states = {
+          CALM: { 
+            class: 'active',
+            integrity: 100,
+            color: 0x00ff00
+          },
+          ALERT: { 
+            class: 'warning',
+            integrity: 80,
+            color: 0xffaa00
+          },
+          DEFENSIVE: { 
+            class: 'danger',
+            integrity: 60,
+            color: 0xff0000
+          }
+        };
+        
+        this.currentState = 'CALM';
+        this.previousState = 'CALM';
+        this.integrity = 100;
+        this.sync = 100;
+        this.stateChangeCallbacks = [];
+      }
+
+      /**
+       * Set system state
+       */
+      setState(state) {
+        if (this.states[state] && state !== this.currentState) {
+          this.previousState = this.currentState;
+          this.currentState = state;
+          this.integrity = this.states[state].integrity;
+          
+          // Notify listeners
+          this.stateChangeCallbacks.forEach(callback => 
+            callback(this.currentState, this.previousState)
+          );
+        }
+      }
+      
+      /**
+       * Register state change listener
+       */
+      onStateChange(callback) {
+        this.stateChangeCallbacks.push(callback);
+      }
+
+      /**
+       * Update system metrics
+       */
+      update(time) {
+        // Dynamic sync calculation
+        this.sync = 90 + Math.sin(time * 0.001) * 10;
+        
+        // Gradually restore integrity in CALM state
+        if (this.currentState === 'CALM' && this.integrity < 100) {
+          this.integrity = Math.min(100, this.integrity + 0.1);
+        }
+        
+        this.updateDisplay();
+      }
+      
+      /**
+       * Update UI display
+       */
+      updateDisplay() {
+        const stateEl = document.getElementById('state');
+        stateEl.textContent = `SYSTEM: ${this.currentState}`;
+        stateEl.className = 'status-line';
+        stateEl.classList.add(this.states[this.currentState].class);
+        
+        document.getElementById('integrity').textContent = 
+          `INTEGRITY: ${Math.round(this.integrity)}%`;
+        document.getElementById('sync').textContent = 
+          `SYNC: ${Math.round(this.sync)}%`;
+      }
+    }
+
+    // ==========================================
+    // Resource Manager - Centralized Resource Tracking
+    // ==========================================
+    class ResourceManager {
+      constructor() {
+        this.resources = {
+          geometries: new Map(),
+          materials: new Map(),
+          textures: new Map()
+        };
+      }
+
+      /**
+       * Add and track geometry
+       */
+      addGeometry(name, geometry) {
+        this.resources.geometries.set(name, geometry);
+        return geometry;
+      }
+
+      /**
+       * Add and track material
+       */
+      addMaterial(name, material) {
+        this.resources.materials.set(name, material);
+        return material;
+      }
+
+      /**
+       * Add and track texture
+       */
+      addTexture(name, texture) {
+        this.resources.textures.set(name, texture);
+        return texture;
+      }
+      
+      /**
+       * Get resource by type and name
+       */
+      get(type, name) {
+        return this.resources[type]?.get(name);
+      }
+
+      /**
+       * Dispose all resources
+       */
+      dispose() {
+        console.log('Disposing resources...');
+        
+        // Dispose in correct order
+        ['materials', 'geometries', 'textures'].forEach(type => {
+          this.resources[type].forEach((resource, name) => {
+            console.log(`Disposing ${type}: ${name}`);
+            resource.dispose();
+          });
+          this.resources[type].clear();
+        });
+        
+        console.log('Resource disposal complete');
+      }
+    }
+
+    // ==========================================
+    // Layer Factory - Creates Polyhedron Layers
+    // ==========================================
+    class LayerFactory {
+      /**
+       * Create core (solid) layer
+       */
+      static createCoreLayer(config, geometry, resources) {
+        const material = new THREE.MeshPhysicalMaterial({
+          color: config.color,
+          emissive: config.color,
+          emissiveIntensity: CONFIG.material.core.emissiveIntensity,
+          metalness: CONFIG.material.core.metalness,
+          roughness: CONFIG.material.core.roughness,
+          clearcoat: CONFIG.material.core.clearcoat,
+          clearcoatRoughness: CONFIG.material.core.clearcoatRoughness
+        });
+        
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.scale.setScalar(config.scale);
+        mesh.castShadow = CONFIG.performance.shadowsEnabled;
+        mesh.receiveShadow = CONFIG.performance.shadowsEnabled;
+        mesh.frustumCulled = true;
+        
+        const group = new THREE.Group();
+        group.name = config.name;
+        group.add(mesh);
+        
+        group.userData = { 
+          mesh, 
+          material, 
+          type: 'core',
+          config,
+          baseScale: config.scale
+        };
+        
+        return group;
+      }
+      
+      /**
+       * Create wireframe layer with enhancements
+       */
+      static createWireframeLayer(config, geometry, resources) {
+        const group = new THREE.Group();
+        group.name = config.name;
+        
+        // Create wireframe
+        const wireframe = this.createWireframe(geometry, config);
+        group.add(wireframe.mesh);
+        
+        // Create edges for better visibility
+        const edges = this.createEdges(geometry, config);
+        group.add(edges.mesh);
+        
+        // Add vertex points for structure clarity
+        const points = this.createVertexPoints(geometry, config);
+        group.add(points.mesh);
+        
+        // Add multi-pass glow for line-only glow effect
+        const glowPasses = this.createMultiPassGlow(geometry, config);
+        glowPasses.forEach(pass => group.add(pass.mesh));
+        
+        // Store all components in userData
+        group.userData = {
+          type: 'shell',
+          config,
+          baseScale: config.scale,
+          // Meshes
+          wireframe: wireframe.mesh,
+          edges: edges.mesh,
+          points: points.mesh,
+          glowMeshes: glowPasses,
+          // Materials (for animation)
+          wireframeMaterial: wireframe.material,
+          edgesMaterial: edges.material,
+          pointsMaterial: points.material
+        };
+        
+        return group;
+      }
+      
+      /**
+       * Create wireframe mesh
+       */
+      static createWireframe(geometry, config) {
+        const wireframeGeometry = new THREE.WireframeGeometry(geometry);
+        const material = new THREE.LineBasicMaterial({
+          color: config.color,
+          linewidth: CONFIG.material.wireframe.linewidth,
+          opacity: CONFIG.material.wireframe.opacity,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        });
+        
+        const mesh = new THREE.LineSegments(wireframeGeometry, material);
+        mesh.scale.setScalar(config.scale);
+        mesh.frustumCulled = true;
+        
+        return { mesh, material, geometry: wireframeGeometry };
+      }
+      
+      /**
+       * Create edge lines
+       */
+      static createEdges(geometry, config) {
+        const edgesGeometry = new THREE.EdgesGeometry(geometry, CONFIG.effects.edgeThreshold);
+        const material = new THREE.LineBasicMaterial({
+          color: config.color,
+          opacity: 1,
+          transparent: false
+        });
+        
+        const mesh = new THREE.LineSegments(edgesGeometry, material);
+        mesh.scale.setScalar(config.scale);
+        mesh.frustumCulled = true;
+        
+        return { mesh, material, geometry: edgesGeometry };
+      }
+      
+      /**
+       * Create vertex points
+       */
+      static createVertexPoints(geometry, config) {
+        const pointsGeometry = new THREE.BufferGeometry();
+        pointsGeometry.setAttribute('position', geometry.attributes.position);
+        
+        const material = new THREE.PointsMaterial({
+          color: config.color,
+          size: CONFIG.effects.vertexPointSize,
+          sizeAttenuation: true,
+          transparent: true,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        });
+        
+        const mesh = new THREE.Points(pointsGeometry, material);
+        mesh.scale.setScalar(config.scale);
+        mesh.frustumCulled = true;
+        
+        return { mesh, material, geometry: pointsGeometry };
+      }
+      
+      /**
+       * Create multi-pass wireframe glow effect
+       */
+      static createMultiPassGlow(geometry, config) {
+        const glowMeshes = [];
+        const scales = [1.003];  // Reduced to single pass
+        const opacities = [0.2]; // Lower opacity for subtlety
+        
+        scales.forEach((scaleMultiplier, index) => {
+          const wireframeGeometry = new THREE.WireframeGeometry(geometry);
+          const material = new THREE.LineBasicMaterial({
+            color: config.color,
+            opacity: opacities[index],
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+          });
+          
+          const mesh = new THREE.LineSegments(wireframeGeometry, material);
+          mesh.scale.setScalar(config.scale * scaleMultiplier);
+          mesh.frustumCulled = true;
+          
+          glowMeshes.push({ mesh, material, scaleMultiplier });
+        });
+        
+        return glowMeshes;
+      }
+      
+
+    }
+
+    // ==========================================
+    // Animation Controller - Handles All Animations
+    // ==========================================
+    class AnimationController {
+      constructor(layers, systemState) {
+        this.layers = layers;
+        this.systemState = systemState;
+        this.time = 0;
+        this.animations = {
+          rotation: true,
+          breathing: true,
+          pulse: true,
+          opacity: true,
+          vertex: true
+        };
+      }
+      
+      /**
+       * Main update loop
+       */
+      update(delta) {
+        this.time += delta;
+        
+        // Calculate global animation values
+        const animationValues = this.calculateAnimationValues();
+        
+        // Update each layer
+        this.layers.forEach((layer, index) => {
+          this.animateLayer(layer, index, animationValues);
+        });
+      }
+      
+      /**
+       * Calculate animation values
+       */
+      calculateAnimationValues() {
+        return {
+          breathing: 1 + Math.sin(this.time * CONFIG.animation.breathingSpeed) * 
+                     CONFIG.animation.breathingAmount,
+          pulse: Math.sin(this.time * CONFIG.animation.pulseSpeed) * 
+                 CONFIG.animation.pulseIntensity
+        };
+      }
+      
+      /**
+       * Animate individual layer
+       */
+      animateLayer(layer, index, values) {
+        const userData = layer.userData;
+        
+        // Rotation animation
+        if (this.animations.rotation) {
+          this.animateRotation(layer, index);
+        }
+        
+        // Type-specific animations
+        if (userData.type === 'core') {
+          this.animateCoreLayer(userData, values);
+        } else if (userData.type === 'shell') {
+          this.animateShellLayer(userData, index, values);
+        }
+      }
+      
+      /**
+       * Animate rotation
+       */
+      animateRotation(layer, index) {
+        const rotationDirection = index % 2 === 0 ? 1 : -1;
+        const rotationSpeed = CONFIG.animation.rotationSpeed * (index + 1);
+        layer.rotation.y += rotationSpeed * rotationDirection;
+      }
+      
+      /**
+       * Animate core layer
+       */
+      animateCoreLayer(userData, values) {
+        if (this.animations.breathing) {
+          userData.mesh.scale.setScalar(userData.baseScale * values.breathing);
+        }
+        
+        if (this.animations.pulse) {
+          userData.material.emissiveIntensity = 
+            CONFIG.material.core.emissiveIntensity + values.pulse;
+        }
+      }
+      
+      /**
+       * Animate shell layer
+       */
+      animateShellLayer(userData, index, values) {
+        const scale = userData.baseScale * values.breathing;
+        
+        // Scale animations
+        if (this.animations.breathing) {
+          userData.wireframe.scale.setScalar(scale);
+          userData.edges.scale.setScalar(scale);
+          userData.points.scale.setScalar(scale);
+          
+          // Scale multi-pass glow meshes maintaining relative scale differences
+          userData.glowMeshes.forEach(glowPass => {
+            glowPass.mesh.scale.setScalar(scale * glowPass.scaleMultiplier);
+          });
+        }
+        
+        // Opacity pulsing
+        if (this.animations.opacity) {
+          const opacityPulse = Utils.map(
+            Math.sin(this.time * 2 + index * 0.5),
+            -1, 1,
+            CONFIG.animation.opacityRange.min,
+            CONFIG.animation.opacityRange.max
+          );
+          
+          userData.wireframeMaterial.opacity = 
+            this.systemState.currentState === 'DEFENSIVE' 
+              ? Math.min(CONFIG.material.wireframeDefensive.opacity, opacityPulse + 0.15)
+              : opacityPulse;
+        }
+        
+        // Vertex point pulsing
+        if (this.animations.vertex && userData.pointsMaterial) {
+          const vertexPulse = CONFIG.effects.vertexPointSize + 
+            Math.sin(this.time * CONFIG.animation.vertexPulseSpeed + index) * 
+            CONFIG.animation.vertexPulseAmount;
+          userData.pointsMaterial.size = Math.max(0.01, vertexPulse);
+        }
+      }
+      
+      /**
+       * Toggle animation type
+       */
+      toggleAnimation(type) {
+        if (this.animations.hasOwnProperty(type)) {
+          this.animations[type] = !this.animations[type];
+          return this.animations[type];
+        }
+        return null;
+      }
+    }
+
+    // ==========================================
+    // Post-Processing Manager (Phase 2 - Bloom Implementation)
+    // ==========================================
+    class PostProcessingManager {
+      constructor(renderer, scene, camera) {
+        this.renderer = renderer;
+        this.scene = scene;
+        this.camera = camera;
+        this.composer = null;
+        this.effects = {};
+        this.enabled = false;
+        
+        // Layer management for selective bloom
+        this.bloomLayer = new THREE.Layers();
+        this.bloomLayer.set(1); // Layer 1 for blooming objects
+        this.darkMaterial = new THREE.MeshBasicMaterial({ color: 'black' });
+        this.materials = {};
+        
+        console.log('PostProcessingManager: Initializing...');
+        this.initialize();
+      }
+      
+      /**
+       * Initialize post-processing pipeline
+       */
+      initialize() {
+        // Check if visual effects are configured
+        if (!CONFIG.visualEffects) {
+          console.warn('PostProcessingManager: No visual effects configuration found');
+          return;
+        }
+        
+        // Log current configuration
+        console.log('PostProcessingManager: Configuration loaded', {
+          bloom: CONFIG.visualEffects.bloom.enabled,
+          chromatic: CONFIG.visualEffects.chromatic.enabled,
+          vignette: CONFIG.visualEffects.vignette.enabled,
+          customShaders: CONFIG.visualEffects.customShaders.enabled,
+          qualityPreset: CONFIG.visualEffects.qualityPreset
+        });
+        
+        // Check for WebGL2 support (recommended for post-processing)
+        const isWebGL2 = this.renderer.capabilities.isWebGL2;
+        console.log(`PostProcessingManager: WebGL2 ${isWebGL2 ? 'supported' : 'not supported'}`);
+        
+        // Initialize effect composer
+        this.setupComposer();
+        
+        // Setup individual effects
+        this.setupEffects();
+        
+        console.log('PostProcessingManager: Ready (Phase 2 - Bloom Active)');
+      }
+      
+      /**
+       * Setup effect composer (Phase 2 - Implemented)
+       */
+      setupComposer() {
+        // Create EffectComposer for post-processing pipeline
+        this.composer = new EffectComposer(this.renderer);
+        
+        // Add render pass (renders the scene)
+        const renderPass = new RenderPass(this.scene, this.camera);
+        this.composer.addPass(renderPass);
+        
+        // Store reference to render pass
+        this.effects.renderPass = renderPass;
+        
+        console.log('PostProcessingManager: Composer initialized with RenderPass');
+      }
+      
+      /**
+       * Setup individual effects (Phase 2 - Bloom Implemented)
+       */
+      setupEffects() {
+        // Setup bloom if configured
+        if (CONFIG.visualEffects.bloom.enabled || true) { // Force setup for toggle capability
+          this.setupBloom();
+        }
+        
+        // Add output pass for proper color space conversion
+        const outputPass = new OutputPass();
+        this.composer.addPass(outputPass);
+        this.effects.outputPass = outputPass;
+        
+        // Other effects will be added in Phase 3-4
+        if (CONFIG.visualEffects.chromatic.enabled) {
+          console.log('PostProcessingManager: Chromatic aberration configured (Phase 4)');
+        }
+        
+        if (CONFIG.visualEffects.vignette.enabled) {
+          console.log('PostProcessingManager: Vignette effect configured (Phase 4)');
+        }
+        
+        if (CONFIG.visualEffects.customShaders.enabled) {
+          console.log('PostProcessingManager: Custom shaders configured (Phase 3)');
+        }
+      }
+      
+      /**
+       * Setup bloom effect with selective layer rendering
+       */
+      setupBloom() {
+        const params = CONFIG.visualEffects.bloom;
+        
+        // Create bloom pass
+        const bloomPass = new UnrealBloomPass(
+          new THREE.Vector2(window.innerWidth, window.innerHeight),
+          params.intensity,
+          params.radius,
+          params.threshold
+        );
+        
+        // Configure bloom parameters
+        bloomPass.threshold = params.threshold;
+        bloomPass.strength = params.intensity;
+        bloomPass.radius = params.radius;
+        
+        // Initially disable bloom
+        bloomPass.enabled = params.enabled;
+        
+        // Add to composer
+        this.composer.addPass(bloomPass);
+        this.effects.bloomPass = bloomPass;
+        
+        console.log('PostProcessingManager: Bloom pass configured', {
+          intensity: params.intensity,
+          radius: params.radius,
+          threshold: params.threshold,
+          enabled: params.enabled
+        });
+      }
+      
+      /**
+       * Prepare layers for selective bloom
+       */
+      prepareLayersForBloom(layers) {
+        if (!layers || !this.effects.bloomPass) return;
+        
+        // Store original materials
+        this.originalMaterials = new Map();
+        
+        // Set bloom layer for specified layer indices
+        const bloomLayerIndices = CONFIG.visualEffects.bloom.layers;
+        
+        layers.forEach((layer, index) => {
+          if (bloomLayerIndices.includes(index)) {
+            // These layers will bloom
+            layer.traverse((child) => {
+              if (child.isMesh || child.isLine || child.isPoints) {
+                child.layers.enable(1); // Enable bloom layer
+                console.log(`Enabled bloom for layer ${index}: ${layer.name}`);
+              }
+            });
+          } else {
+            // These layers won't bloom
+            layer.traverse((child) => {
+              if (child.isMesh || child.isLine || child.isPoints) {
+                child.layers.disable(1); // Disable bloom layer
+              }
+            });
+          }
+        });
+        
+        console.log('PostProcessingManager: Layers prepared for selective bloom');
+      }
+      
+      /**
+       * Toggle effect by name
+       */
+      toggleEffect(effectName) {
+        if (effectName === 'bloom' && this.effects.bloomPass) {
+          // Toggle bloom effect
+          CONFIG.visualEffects.bloom.enabled = !CONFIG.visualEffects.bloom.enabled;
+          this.effects.bloomPass.enabled = CONFIG.visualEffects.bloom.enabled;
+          this.enabled = this.hasEnabledEffects();
+          
+          console.log(`PostProcessingManager: Bloom ${CONFIG.visualEffects.bloom.enabled ? 'enabled' : 'disabled'}`);
+          return CONFIG.visualEffects.bloom.enabled;
+        }
+        
+        if (CONFIG.visualEffects[effectName]) {
+          CONFIG.visualEffects[effectName].enabled = !CONFIG.visualEffects[effectName].enabled;
+          console.log(`PostProcessingManager: ${effectName} ${CONFIG.visualEffects[effectName].enabled ? 'enabled' : 'disabled'}`);
+          return CONFIG.visualEffects[effectName].enabled;
+        }
+        
+        console.warn(`PostProcessingManager: Effect '${effectName}' not found`);
+        return null;
+      }
+      
+      /**
+       * Set bloom intensity
+       */
+      setBloomIntensity(intensity) {
+        if (this.effects.bloomPass) {
+          this.effects.bloomPass.strength = intensity;
+          CONFIG.visualEffects.bloom.intensity = intensity;
+        }
+      }
+      
+      /**
+       * Set bloom threshold
+       */
+      setBloomThreshold(threshold) {
+        if (this.effects.bloomPass) {
+          this.effects.bloomPass.threshold = threshold;
+          CONFIG.visualEffects.bloom.threshold = threshold;
+        }
+      }
+      
+      /**
+       * Set bloom radius
+       */
+      setBloomRadius(radius) {
+        if (this.effects.bloomPass) {
+          this.effects.bloomPass.radius = radius;
+          CONFIG.visualEffects.bloom.radius = radius;
+        }
+      }
+      
+      /**
+       * Set quality preset
+       */
+      setQualityPreset(preset) {
+        const validPresets = ['low', 'medium', 'high', 'ultra'];
+        if (validPresets.includes(preset)) {
+          CONFIG.visualEffects.qualityPreset = preset;
+          console.log(`PostProcessingManager: Quality preset set to '${preset}'`);
+          this.applyQualityPreset();
+        } else {
+          console.warn(`PostProcessingManager: Invalid quality preset '${preset}'`);
+        }
+      }
+      
+      /**
+       * Apply quality preset settings
+       */
+      applyQualityPreset() {
+        const preset = CONFIG.visualEffects.qualityPreset;
+        
+        switch (preset) {
+          case 'low':
+            // Minimal effects for performance
+            this.setBloomIntensity(0.3);  // Reduced scale
+            this.setBloomRadius(0.1);     // Reduced scale
+            console.log('PostProcessingManager: LOW quality preset applied');
+            break;
+          case 'medium':
+            // Balanced settings
+            this.setBloomIntensity(0.8);  // Matches new default
+            this.setBloomRadius(0.2);     // Matches new default
+            console.log('PostProcessingManager: MEDIUM quality preset applied');
+            break;
+          case 'high':
+            // High quality
+            this.setBloomIntensity(1.2);  // Reduced scale
+            this.setBloomRadius(0.3);     // Reduced scale
+            console.log('PostProcessingManager: HIGH quality preset applied');
+            break;
+          case 'ultra':
+            // Maximum quality
+            this.setBloomIntensity(1.5);  // Reduced scale
+            this.setBloomRadius(0.4);     // Reduced scale
+            console.log('PostProcessingManager: ULTRA quality preset applied');
+            break;
+        }
+      }
+      
+      /**
+       * Update/render post-processing
+       */
+      render(deltaTime) {
+        if (!this.composer) {
+          // No composer, use standard rendering
+          return false;
+        }
+        
+        // Always render through composer for consistent output
+        // Effects will be applied based on their enabled state
+        this.composer.render(deltaTime);
+        return true;
+      }
+      
+      /**
+       * Handle window resize
+       */
+      resize(width, height) {
+        if (this.composer) {
+          this.composer.setSize(width, height);
+          
+          // Update bloom pass resolution
+          if (this.effects.bloomPass) {
+            this.effects.bloomPass.resolution = new THREE.Vector2(width, height);
+          }
+          
+          console.log(`PostProcessingManager: Resized to ${width}x${height}`);
+        }
+      }
+      
+      /**
+       * Check performance and auto-adjust if needed
+       */
+      checkPerformance(fps) {
+        if (!CONFIG.visualEffects.autoAdjust) return;
+        
+        // Auto-adjust quality based on FPS
+        if (fps < 30 && CONFIG.visualEffects.qualityPreset !== 'low') {
+          console.warn(`PostProcessingManager: Low FPS (${fps}), switching to low quality`);
+          this.setQualityPreset('low');
+        } else if (fps > 50 && fps < 60 && CONFIG.visualEffects.qualityPreset === 'ultra') {
+          this.setQualityPreset('high');
+        } else if (fps >= 60 && CONFIG.visualEffects.qualityPreset === 'low') {
+          console.log(`PostProcessingManager: Good FPS (${fps}), switching to medium quality`);
+          this.setQualityPreset('medium');
+        }
+      }
+      
+      /**
+       * Check if any effects are enabled
+       */
+      hasEnabledEffects() {
+        return CONFIG.visualEffects.bloom.enabled ||
+               CONFIG.visualEffects.chromatic.enabled ||
+               CONFIG.visualEffects.vignette.enabled ||
+               CONFIG.visualEffects.customShaders.enabled;
+      }
+      
+      /**
+       * Dispose post-processing resources
+       */
+      dispose() {
+        console.log('PostProcessingManager: Disposing resources...');
+        
+        if (this.composer) {
+          // Dispose all passes
+          this.composer.passes.forEach(pass => {
+            if (pass.dispose) pass.dispose();
+          });
+          
+          // Dispose composer render targets
+          if (this.composer.renderTarget1) {
+            this.composer.renderTarget1.dispose();
+          }
+          if (this.composer.renderTarget2) {
+            this.composer.renderTarget2.dispose();
+          }
+          
+          this.composer = null;
+        }
+        
+        // Clear effects
+        this.effects = {};
+        this.enabled = false;
+        
+        console.log('PostProcessingManager: Disposed');
+      }
+    }
+
+    // ==========================================
+    // Shader Manager (Phase 3 - Custom Shaders)
+    // ==========================================
+    class ShaderManager {
+      constructor() {
+        this.shaders = {};
+        this.uniforms = {};
+        this.time = 0;
+        
+        console.log('ShaderManager: Initializing custom shaders...');
+        this.createEnergyFlowShader();
+      }
+      
+      /**
+       * Create energy flow shader for outer layers
+       */
+      createEnergyFlowShader() {
+        // Shared uniforms for all energy shaders
+        this.uniforms.energy = {
+          time: { value: 0 },
+          intensity: { value: 1.0 },
+          systemState: { value: 0.0 }, // 0 = CALM, 1 = ALERT, 2 = DEFENSIVE
+          flowSpeed: { value: 1.0 },
+          pulseSpeed: { value: 2.0 },
+          colorA: { value: new THREE.Color(0xAA00FF) }, // Base purple
+          colorB: { value: new THREE.Color(0xFF00FF) }, // Bright magenta
+          colorC: { value: new THREE.Color(0x00FFFF) }  // Cyan accent
+        };
+        
+        // Vertex shader - handles vertex positions and passes data to fragment
+        const vertexShader = `
+          varying vec2 vUv;
+          varying vec3 vPosition;
+          varying vec3 vNormal;
+          
+          uniform float time;
+          uniform float systemState;
+          
+          void main() {
+            vUv = uv;
+            vPosition = position;
+            vNormal = normalize(normalMatrix * normal);
+            
+            // Add slight vertex displacement based on state
+            vec3 displaced = position;
+            float stateIntensity = systemState * 0.5;
+            float wave = sin(position.x * 10.0 + time * 2.0) * 0.01;
+            displaced += normal * wave * stateIntensity;
+            
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
+          }
+        `;
+        
+        // Fragment shader - creates the energy flow effect
+        const fragmentShader = `
+          uniform float time;
+          uniform float intensity;
+          uniform float systemState;
+          uniform float flowSpeed;
+          uniform float pulseSpeed;
+          uniform vec3 colorA;
+          uniform vec3 colorB;
+          uniform vec3 colorC;
+          
+          varying vec2 vUv;
+          varying vec3 vPosition;
+          varying vec3 vNormal;
+          
+          // Simple noise function
+          float noise(vec2 st) {
+            return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+          }
+          
+          void main() {
+            // Create flowing energy pattern
+            float flow = sin(vPosition.y * 5.0 - time * flowSpeed) * 0.5 + 0.5;
+            flow *= sin(vPosition.x * 3.0 + time * flowSpeed * 0.7) * 0.5 + 0.5;
+            flow *= sin(vPosition.z * 4.0 - time * flowSpeed * 1.2) * 0.5 + 0.5;
+            
+            // Add noise for organic feel
+            float n = noise(vUv + time * 0.1) * 0.2;
+            flow += n;
+            
+            // Pulse based on system state
+            float stateFactor = 1.0 + systemState * 0.5;
+            float pulse = sin(time * pulseSpeed * stateFactor) * 0.3 + 0.7;
+            
+            // Mix colors based on flow and state
+            vec3 color = mix(colorA, colorB, flow);
+            color = mix(color, colorC, systemState / 2.0);
+            
+            // Add rim lighting effect
+            vec3 viewDir = normalize(cameraPosition - vPosition);
+            float rim = 1.0 - max(0.0, dot(viewDir, vNormal));
+            rim = pow(rim, 2.0);
+            
+            // Combine effects
+            float finalIntensity = intensity * pulse;
+            color += rim * colorC * 0.5;
+            
+            // Energy bands
+            float bands = sin(flow * 30.0) * 0.5 + 0.5;
+            bands = pow(bands, 3.0);
+            color += bands * colorB * 0.3;
+            
+            // Output with intensity
+            gl_FragColor = vec4(color * finalIntensity, 1.0);
+            
+            // Add glow for bloom
+            float brightness = dot(color, vec3(0.299, 0.587, 0.114));
+            if (brightness > 0.5) {
+              gl_FragColor.rgb *= 1.5; // Boost bright areas for bloom
+            }
+          }
+        `;
+        
+        // Create the shader material
+        this.shaders.energyFlow = new THREE.ShaderMaterial({
+          uniforms: this.uniforms.energy,
+          vertexShader: vertexShader,
+          fragmentShader: fragmentShader,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        });
+        
+        console.log('ShaderManager: Energy flow shader created');
+        return this.shaders.energyFlow;
+      }
+      
+      /**
+       * Create holographic shader (Phase 3 - Future)
+       */
+      createHolographicShader() {
+        // TODO: Implement holographic effect
+        console.log('ShaderManager: Holographic shader (future implementation)');
+      }
+      
+      /**
+       * Create fresnel shader (Phase 3 - Future)  
+       */
+      createFresnelShader() {
+        // TODO: Implement fresnel rim lighting
+        console.log('ShaderManager: Fresnel shader (future implementation)');
+      }
+      
+      /**
+       * Update shader uniforms
+       */
+      update(deltaTime, systemState) {
+        this.time += deltaTime;
+        
+        // Update energy flow uniforms
+        if (this.uniforms.energy) {
+          this.uniforms.energy.time.value = this.time;
+          
+          // Map system state to numeric value
+          let stateValue = 0;
+          switch(systemState) {
+            case 'CALM': stateValue = 0; break;
+            case 'ALERT': stateValue = 1; break;
+            case 'DEFENSIVE': stateValue = 2; break;
+          }
+          this.uniforms.energy.systemState.value = stateValue;
+          
+          // Adjust animation speeds based on state
+          this.uniforms.energy.flowSpeed.value = 1.0 + stateValue * 0.5;
+          this.uniforms.energy.pulseSpeed.value = 2.0 + stateValue * 1.0;
+        }
+      }
+      
+      /**
+       * Apply shader to mesh
+       */
+      applyShaderToMesh(mesh, shaderType) {
+        if (!this.shaders[shaderType]) {
+          console.warn(`ShaderManager: Shader type '${shaderType}' not found`);
+          return null;
+        }
+        
+        // Store original material
+        const originalMaterial = mesh.material;
+        
+        // Apply new shader
+        mesh.material = this.shaders[shaderType];
+        
+        console.log(`ShaderManager: Applied ${shaderType} shader to mesh`);
+        return originalMaterial;
+      }
+      
+      /**
+       * Get shader by type
+       */
+      getShader(type) {
+        return this.shaders[type] || null;
+      }
+      
+      /**
+       * Set shader intensity
+       */
+      setIntensity(intensity) {
+        if (this.uniforms.energy) {
+          this.uniforms.energy.intensity.value = intensity;
+        }
+      }
+      
+      /**
+       * Set shader colors
+       */
+      setColors(colorA, colorB, colorC) {
+        if (this.uniforms.energy) {
+          if (colorA) this.uniforms.energy.colorA.value = new THREE.Color(colorA);
+          if (colorB) this.uniforms.energy.colorB.value = new THREE.Color(colorB);
+          if (colorC) this.uniforms.energy.colorC.value = new THREE.Color(colorC);
+        }
+      }
+      
+      /**
+       * Dispose shaders
+       */
+      dispose() {
+        console.log('ShaderManager: Disposing shaders...');
+        
+        // Dispose shader materials
+        Object.values(this.shaders).forEach(shader => {
+          if (shader && shader.dispose) {
+            shader.dispose();
+          }
+        });
+        
+        this.shaders = {};
+        this.uniforms = {};
+        
+        console.log('ShaderManager: Disposed');
+      }
+    }
+
+    // ==========================================
+    // Scene Manager - Handles 3D Scene Setup
+    // ==========================================
+    class SceneManager {
+      constructor(container) {
+        this.container = container;
+        this.setupRenderer();
+        this.setupScene();
+        this.setupCamera();
+        this.setupLighting();
+      }
+      
+      /**
+       * Setup WebGL renderer
+       */
+      setupRenderer() {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('webgl2') || canvas.getContext('webgl');
+        const isMobile = Utils.isMobile();
+        const width = window.innerWidth;
+        
+        this.renderer = new THREE.WebGLRenderer({
+          canvas,
+          context,
+          antialias: !isMobile && width > CONFIG.performance.antialiasThreshold,
+          alpha: false,
+          powerPreference: isMobile ? 'low-power' : 'high-performance',
+          stencil: false,
+          depth: true,
+          preserveDrawingBuffer: false,
+          failIfMajorPerformanceCaveat: false,
+          logarithmicDepthBuffer: CONFIG.performance.logarithmicDepthBuffer
+        });
+        
+        // Color and tone mapping
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1;
+        
+        // Pixel ratio
+        const pixelRatio = Math.min(
+          window.devicePixelRatio,
+          isMobile ? CONFIG.performance.mobilePixelRatio : CONFIG.performance.maxPixelRatio
+        );
+        this.renderer.setPixelRatio(pixelRatio);
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        // Shadows (disabled for performance)
+        this.renderer.shadowMap.enabled = CONFIG.performance.shadowsEnabled;
+        if (CONFIG.performance.shadowsEnabled) {
+          this.renderer.shadowMap.type = THREE.VSMShadowMap;
+        }
+        
+        this.container.appendChild(this.renderer.domElement);
+        
+        // Update WebGL info
+        const webglVersion = Utils.detectWebGLVersion(this.renderer);
+        document.getElementById('webgl-version').textContent = webglVersion;
+        document.getElementById('webglInfo').textContent = 
+          `${webglVersion} • Three.js r168 • ${pixelRatio}x`;
+      }
+      
+      /**
+       * Setup scene
+       */
+      setupScene() {
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x0a0a0f);
+        this.scene.fog = new THREE.Fog(0x0a0a0f, 20, 50);
+      }
+      
+      /**
+       * Setup camera
+       */
+      setupCamera() {
+        this.camera = new THREE.PerspectiveCamera(
+          CONFIG.camera.fov,
+          window.innerWidth / window.innerHeight,
+          CONFIG.camera.near,
+          CONFIG.camera.far
+        );
+        this.camera.position.fromArray(CONFIG.camera.position);
+        this.camera.lookAt(0, 0, 0);
+      }
+      
+      /**
+       * Setup lighting
+       */
+      setupLighting() {
+        // Ambient light
+        const ambient = new THREE.AmbientLight(
+          CONFIG.lighting.ambient.color,
+          CONFIG.lighting.ambient.intensity
+        );
+        this.scene.add(ambient);
+        
+        // Main directional light
+        const mainLight = new THREE.DirectionalLight(
+          CONFIG.lighting.main.color,
+          CONFIG.lighting.main.intensity
+        );
+        mainLight.position.fromArray(CONFIG.lighting.main.position);
+        mainLight.decay = 0;
+        this.scene.add(mainLight);
+        
+        // Rim light for depth
+        const rimLight = new THREE.DirectionalLight(
+          CONFIG.lighting.rim.color,
+          CONFIG.lighting.rim.intensity
+        );
+        rimLight.position.fromArray(CONFIG.lighting.rim.position);
+        rimLight.decay = 0;
+        this.scene.add(rimLight);
+      }
+      
+      /**
+       * Setup orbit controls
+       */
+      setupControls() {
+        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+        
+        // Apply config settings
+        Object.assign(this.controls, CONFIG.controls);
+        
+        // Touch controls
+        this.controls.touches = {
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN
+        };
+        
+        return this.controls;
+      }
+      
+      /**
+       * Handle window resize
+       */
+      resize(width, height) {
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(width, height);
+        
+        // Update antialias based on new size
+        const isMobile = Utils.isMobile();
+        const shouldAntialias = !isMobile && width > CONFIG.performance.antialiasThreshold;
+        if (this.renderer.antialias !== shouldAntialias) {
+          console.log(`Antialias changed to: ${shouldAntialias}`);
+        }
+      }
+      
+      /**
+       * Render scene
+       */
+      render() {
+        this.renderer.render(this.scene, this.camera);
+      }
+      
+      /**
+       * Dispose renderer and resources
+       */
+      dispose() {
+        this.controls?.dispose();
+        this.renderer.dispose();
+        this.renderer.forceContextLoss();
+        const canvas = this.renderer.domElement;
+        if (canvas.parentElement) {
+          canvas.parentElement.removeChild(canvas);
+        }
+      }
+    }
+
+    // ==========================================
+    // Main Application Controller
+    // ==========================================
+    class ZenoApplication {
+      constructor() {
+        this.isPaused = false;
+        this.animationId = null;
+        this.clock = new THREE.Clock();
+        this.layers = [];
+        
+        // Initialize application
+        this.init();
+      }
+      
+      /**
+       * Initialize application
+       */
+      async init() {
+        try {
+          // Clear loading screen
+          const container = document.getElementById('app');
+          container.innerHTML = '';
+          
+          // Initialize core systems
+          this.initializeSystems(container);
+          
+          // Create 3D content
+          this.createGeometry();
+          this.createLayers();
+          
+          // Setup controllers
+          this.animation = new AnimationController(this.layers, this.systemState);
+          
+          // Setup UI and event handlers
+          this.setupUI();
+          this.setupEventHandlers();
+          
+          // Log initialization
+          console.log('ZENØ initialized successfully');
+          console.log(`Layers: ${this.layers.length}`);
+          console.log(`WebGL: ${Utils.detectWebGLVersion(this.scene.renderer)}`);
+          
+          // Start animation loop
+          this.animate();
+          
+        } catch (error) {
+          this.handleError(error);
+        }
+      }
+      
+      /**
+       * Initialize core systems
+       */
+      initializeSystems(container) {
+        this.resources = new ResourceManager();
+        this.scene = new SceneManager(container);
+        this.systemState = new SystemStateManager();
+        this.perfMonitor = new PerformanceMonitor();
+        
+        // Initialize Shader Manager (Phase 3)
+        this.shaderManager = new ShaderManager();
+        
+        // Initialize Post-Processing Manager (Phase 2)
+        this.postProcessing = new PostProcessingManager(
+          this.scene.renderer,
+          this.scene.scene,
+          this.scene.camera
+        );
+        
+        // Setup camera controls
+        this.scene.setupControls();
+        
+        // Listen for state changes
+        this.systemState.onStateChange((newState, oldState) => {
+          console.log(`State changed: ${oldState} → ${newState}`);
+        });
+      }
+      
+      /**
+       * Create base geometries
+       */
+      createGeometry() {
+        // Create geometries based on layer complexity
+        this.geometries = {};
+        
+        // Core geometry (higher detail)
+        this.geometries.core = this.resources.addGeometry(
+          'core',
+          new THREE.IcosahedronGeometry(1, 3)
+        );
+        
+        // Shell geometry (lower detail for performance)
+        this.geometries.shell = this.resources.addGeometry(
+          'shell',
+          new THREE.IcosahedronGeometry(1, 2)
+        );
+      }
+      
+      /**
+       * Create polyhedron layers
+       */
+      createLayers() {
+        CONFIG.layers.forEach((layerConfig, index) => {
+          let layer;
+          const geometry = layerConfig.type === 'solid' 
+            ? this.geometries.core 
+            : this.geometries.shell;
+          
+          if (layerConfig.type === 'solid') {
+            layer = LayerFactory.createCoreLayer(
+              layerConfig,
+              geometry,
+              this.resources
+            );
+            // Track material
+            this.resources.addMaterial(`core-${index}`, layer.userData.material);
+            
+          } else {
+            layer = LayerFactory.createWireframeLayer(
+              layerConfig,
+              geometry,
+              this.resources
+            );
+            // Track materials
+            const userData = layer.userData;
+            this.resources.addMaterial(`wire-${index}`, userData.wireframeMaterial);
+            this.resources.addMaterial(`edge-${index}`, userData.edgesMaterial);
+            this.resources.addMaterial(`point-${index}`, userData.pointsMaterial);
+            // Track glow pass materials
+            userData.glowMeshes.forEach((glowPass, glowIndex) => {
+              this.resources.addMaterial(`glow-${index}-${glowIndex}`, glowPass.material);
+            });
+          }
+          
+          // Store index for animation
+          layer.userData.index = index;
+          
+          // Add to scene and track
+          this.layers.push(layer);
+          this.scene.scene.add(layer);
+        });
+        
+        // Prepare layers for selective bloom (Phase 2)
+        if (this.postProcessing) {
+          this.postProcessing.prepareLayersForBloom(this.layers);
+        }
+        
+        // Apply custom shaders to outermost layer (Phase 3)
+        this.applyCustomShaders();
+      }
+      
+      /**
+       * Apply custom shaders to specific layers
+       */
+      applyCustomShaders() {
+        if (!this.shaderManager || !CONFIG.visualEffects.customShaders.enabled) {
+          return;
+        }
+        
+        // Store original materials
+        this.originalMaterials = new Map();
+        
+        // Apply energy flow shader to outermost wireframe layer (Gates - index 4)
+        const outerLayerIndex = 4;
+        if (this.layers[outerLayerIndex]) {
+          const layer = this.layers[outerLayerIndex];
+          const userData = layer.userData;
+          
+          // Apply to wireframe mesh
+          if (userData.wireframe) {
+            // Store original material
+            this.originalMaterials.set('wireframe-outer', userData.wireframeMaterial);
+            
+            // Apply energy shader
+            const energyShader = this.shaderManager.getShader('energyFlow');
+            if (energyShader) {
+              userData.wireframe.material = energyShader;
+              userData.wireframeMaterial = energyShader; // Update reference
+              
+              // Set custom colors for Gates layer
+              this.shaderManager.setColors(0xAA00FF, 0xFF00FF, 0x00FFFF);
+              
+              console.log(`Applied energy flow shader to ${layer.name}`);
+            }
+          }
+        }
+      }
+      
+      /**
+       * Toggle custom shaders
+       */
+      toggleCustomShaders() {
+        CONFIG.visualEffects.customShaders.enabled = !CONFIG.visualEffects.customShaders.enabled;
+        
+        if (!CONFIG.visualEffects.customShaders.enabled) {
+          // Restore original materials
+          if (this.originalMaterials) {
+            const outerLayer = this.layers[4];
+            if (outerLayer && outerLayer.userData.wireframe) {
+              const originalMaterial = this.originalMaterials.get('wireframe-outer');
+              if (originalMaterial) {
+                outerLayer.userData.wireframe.material = originalMaterial;
+                outerLayer.userData.wireframeMaterial = originalMaterial;
+                console.log('Restored original material to Gates layer');
+              }
+            }
+          }
+        } else {
+          // Apply custom shaders
+          this.applyCustomShaders();
+        }
+        
+        return CONFIG.visualEffects.customShaders.enabled;
+      }
+      
+      /**
+       * Setup user interface
+       */
+      setupUI() {
+        // Show legend
+        const legend = document.getElementById('legend');
+        legend.style.display = 'block';
+        
+        // Initialize status display
+        this.systemState.updateDisplay();
+      }
+      
+      /**
+       * Setup event handlers
+       */
+      setupEventHandlers() {
+        // Keyboard controls
+        this.keyHandler = (e) => this.handleKeyPress(e);
+        window.addEventListener('keydown', this.keyHandler);
+        
+        // Legend toggle
+        this.legend = document.getElementById('legend');
+        this.legendHandler = () => this.legend.classList.toggle('collapsed');
+        this.legend.addEventListener('click', this.legendHandler);
+        
+        // Window resize with ResizeObserver
+        this.resizeObserver = new ResizeObserver(entries => {
+          for (let entry of entries) {
+            const { width, height } = entry.contentRect;
+            this.scene.resize(width, height);
+            // Update post-processing manager on resize
+            if (this.postProcessing) {
+              this.postProcessing.resize(width, height);
+            }
+          }
+        });
+        this.resizeObserver.observe(document.getElementById('app'));
+        
+        // Page visibility
+        this.visibilityHandler = () => this.handleVisibilityChange();
+        document.addEventListener('visibilitychange', this.visibilityHandler);
+        
+        // WebGL context loss handlers
+        this.setupContextLossHandlers();
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => this.dispose());
+      }
+      
+      /**
+       * Setup WebGL context loss handlers
+       */
+      setupContextLossHandlers() {
+        const canvas = this.scene.renderer.domElement;
+        
+        canvas.addEventListener('webglcontextlost', (e) => {
+          e.preventDefault();
+          console.warn('WebGL context lost');
+          this.isPaused = true;
+          this.systemState.setState('ALERT');
+        });
+        
+        canvas.addEventListener('webglcontextrestored', () => {
+          console.log('WebGL context restored');
+          this.isPaused = false;
+          this.systemState.setState('CALM');
+        });
+      }
+      
+      /**
+       * Handle keyboard input
+       */
+      handleKeyPress(e) {
+        const key = e.key.toLowerCase();
+        
+        const actions = {
+          ' ': () => { e.preventDefault(); this.togglePause(); },
+          'r': () => this.resetView(),
+          'p': () => this.togglePerformanceMonitor(),
+          '1': () => this.systemState.setState('CALM'),
+          '2': () => this.systemState.setState('ALERT'),
+          '3': () => this.systemState.setState('DEFENSIVE'),
+          // Hidden controls
+          'h': () => this.toggleHelp(),
+          'f': () => this.toggleFullscreen(),
+          // Post-processing controls (Phase 2 - Bloom Active)
+          'b': () => {
+            if (this.postProcessing) {
+              const enabled = this.postProcessing.toggleEffect('bloom');
+              console.log(`Main: Bloom effect ${enabled ? 'ENABLED' : 'DISABLED'}`);
+            }
+          },
+          // Custom shader controls (Phase 3)
+          's': () => {
+            const enabled = this.toggleCustomShaders();
+            console.log(`Main: Custom shaders ${enabled ? 'ENABLED' : 'DISABLED'}`);
+          },
+          'i': () => {
+            // Adjust shader intensity
+            if (this.shaderManager && CONFIG.visualEffects.customShaders.enabled) {
+              const currentIntensity = this.shaderManager.uniforms.energy?.intensity.value || 1;
+              const newIntensity = currentIntensity >= 2 ? 0.5 : currentIntensity + 0.5;
+              this.shaderManager.setIntensity(newIntensity);
+              console.log(`Shader intensity: ${newIntensity}`);
+            }
+          }
+        };
+        
+        if (actions[key]) {
+          actions[key]();
+        }
+      }
+      
+      /**
+       * Toggle pause state
+       */
+      togglePause() {
+        this.isPaused = !this.isPaused;
+        this.scene.controls.autoRotate = !this.isPaused;
+        console.log(`Animation ${this.isPaused ? 'paused' : 'resumed'}`);
+      }
+      
+      /**
+       * Reset camera view
+       */
+      resetView() {
+        this.scene.camera.position.fromArray(CONFIG.camera.position);
+        this.scene.controls.target.set(0, 0, 0);
+        this.scene.controls.update();
+        this.systemState.setState('CALM');
+        console.log('View reset');
+      }
+      
+      /**
+       * Toggle performance monitor
+       */
+      togglePerformanceMonitor() {
+        const isVisible = this.perfMonitor.toggle();
+        if (isVisible) {
+          this.scene.renderer.info.reset();
+        }
+        console.log(`Performance monitor ${isVisible ? 'shown' : 'hidden'}`);
+      }
+      
+      /**
+       * Toggle help display
+       */
+      toggleHelp() {
+        const controls = document.querySelector('.controls');
+        controls.style.display = controls.style.display === 'none' ? 'block' : 'none';
+      }
+      
+      /**
+       * Toggle fullscreen
+       */
+      toggleFullscreen() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      }
+      
+      /**
+       * Handle visibility change
+       */
+      handleVisibilityChange() {
+        if (document.hidden) {
+          this.wasPaused = this.isPaused;
+          this.isPaused = true;
+          this.scene.controls.autoRotate = false;
+          if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+          }
+          console.log('Tab hidden - animation paused');
+        } else if (!this.wasPaused) {
+          this.isPaused = false;
+          this.scene.controls.autoRotate = true;
+          this.animate();
+          console.log('Tab visible - animation resumed');
+        }
+      }
+      
+      /**
+       * Main animation loop
+       */
+      animate() {
+        this.animationId = requestAnimationFrame(() => this.animate());
+        
+        // Calculate delta time once per frame
+        const delta = Utils.clamp(this.clock.getDelta(), 0, 0.1);
+        
+        // Update animations if not paused
+        if (!this.isPaused) {
+          // Update systems
+          this.systemState.update(this.clock.getElapsedTime());
+          this.animation.update(delta);
+          
+          // Update custom shaders (Phase 3)
+          if (this.shaderManager && CONFIG.visualEffects.customShaders.enabled) {
+            this.shaderManager.update(delta, this.systemState.currentState);
+          }
+        }
+        
+        // Always update controls for smooth interaction
+        this.scene.controls.update();
+        
+        // Reset render info if monitoring
+        if (this.perfMonitor.visible) {
+          this.scene.renderer.info.reset();
+        }
+        
+        // Render scene through post-processing or standard renderer
+        if (this.postProcessing && !this.postProcessing.render(delta)) {
+          // Fallback to standard rendering if composer isn't active
+          this.scene.render();
+        }
+        
+        // Update performance stats
+        if (this.perfMonitor.visible) {
+          this.perfMonitor.update(this.scene.renderer);
+        }
+        
+        // Check performance for auto-adjustment (Phase 1 - Monitoring only)
+        if (this.postProcessing && CONFIG.visualEffects.autoAdjust) {
+          const currentFPS = this.perfMonitor.fps;
+          if (currentFPS > 0) {  // Only check after FPS is calculated
+            this.postProcessing.checkPerformance(currentFPS);
+          }
+        }
+      }
+      
+      /**
+       * Handle application errors
+       */
+      handleError(error) {
+        console.error('Application error:', error);
+        document.getElementById('app').innerHTML = `
+          <div class="error-message">
+            Failed to initialize ZENØ
+            <small>${error.message}</small>
+          </div>
+        `;
+      }
+      
+      /**
+       * Cleanup and dispose
+       */
+      dispose() {
+        console.log('Disposing ZENØ application...');
+        
+        // Cancel animation
+        if (this.animationId) {
+          cancelAnimationFrame(this.animationId);
+        }
+        
+        // Remove event listeners
+        this.removeEventListeners();
+        
+        // Clear scene
+        this.clearScene();
+        
+        // Dispose resources
+        this.resources.dispose();
+        
+        // Dispose custom shaders
+        if (this.shaderManager) {
+          this.shaderManager.dispose();
+        }
+        
+        // Dispose post-processing
+        if (this.postProcessing) {
+          this.postProcessing.dispose();
+        }
+        
+        // Dispose renderer
+        this.scene.dispose();
+        
+        console.log('Application disposal complete');
+      }
+      
+      /**
+       * Remove all event listeners
+       */
+      removeEventListeners() {
+        window.removeEventListener('keydown', this.keyHandler);
+        this.legend.removeEventListener('click', this.legendHandler);
+        document.removeEventListener('visibilitychange', this.visibilityHandler);
+        this.resizeObserver.disconnect();
+      }
+      
+      /**
+       * Clear 3D scene
+       */
+      clearScene() {
+        this.scene.scene.traverse(child => {
+          if (child instanceof THREE.Mesh || 
+              child instanceof THREE.LineSegments || 
+              child instanceof THREE.Points) {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach(m => m.dispose());
+              } else {
+                child.material.dispose();
+              }
+            }
+          }
+        });
+        this.scene.scene.clear();
+      }
+    }
+
+    // ==========================================
+    // Application Entry Point
+    // ==========================================
+    console.log('ZENØ v2.0 - Refactored Edition');
+    const app = new ZenoApplication();
+    
+    // Expose app to window for debugging (optional)
+    if (typeof window !== 'undefined') {
+      window.ZENO = app;
+    }
+  </script>
+</body>
+</html>
