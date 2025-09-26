@@ -838,6 +838,7 @@
        */
       static createWireframe(geometry, config) {
         const wireframeGeometry = new THREE.WireframeGeometry(geometry);
+        this.ensureWireframeShaderAttributes(wireframeGeometry);
         const material = new THREE.LineBasicMaterial({
           color: config.color,
           linewidth: CONFIG.material.wireframe.linewidth,
@@ -852,6 +853,80 @@
         mesh.frustumCulled = true;
         
         return { mesh, material, geometry: wireframeGeometry };
+      }
+
+      /**
+       * Ensure wireframe geometry carries attributes required by custom shaders
+       */
+      static ensureWireframeShaderAttributes(wireframeGeometry) {
+        if (!wireframeGeometry || !wireframeGeometry.getAttribute) {
+          return;
+        }
+
+        // Avoid regenerating attributes if they already exist
+        if (wireframeGeometry.getAttribute('segmentDirection')) {
+          return;
+        }
+
+        const positionAttr = wireframeGeometry.getAttribute('position');
+        if (!positionAttr) {
+          return;
+        }
+
+        const vertexCount = positionAttr.count;
+        if (vertexCount % 2 !== 0) {
+          console.warn('Wireframe geometry has an odd vertex count; skipping shader attributes.');
+          return;
+        }
+
+        const directions = new Float32Array(vertexCount * 3);
+        const lengths = new Float32Array(vertexCount);
+        const offsets = new Float32Array(vertexCount);
+        const seeds = new Float32Array(vertexCount);
+
+        const start = new THREE.Vector3();
+        const end = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+
+        for (let i = 0; i < vertexCount; i += 2) {
+          start.fromBufferAttribute(positionAttr, i);
+          end.fromBufferAttribute(positionAttr, i + 1);
+
+          direction.copy(end).sub(start);
+          const length = direction.length();
+          if (length > 0) {
+            direction.divideScalar(length);
+          } else {
+            direction.set(0, 0, 1);
+          }
+
+          const baseIndex = i * 3;
+          directions[baseIndex] = direction.x;
+          directions[baseIndex + 1] = direction.y;
+          directions[baseIndex + 2] = direction.z;
+          directions[baseIndex + 3] = direction.x;
+          directions[baseIndex + 4] = direction.y;
+          directions[baseIndex + 5] = direction.z;
+
+          lengths[i] = length;
+          lengths[i + 1] = length;
+
+          offsets[i] = 0;
+          offsets[i + 1] = length;
+
+          const seedSource =
+            start.x * 12.9898 + start.y * 78.233 + start.z * 37.719 +
+            end.x * 45.164 + end.y * 94.673 + end.z * 26.517;
+          const rawSeed = Math.sin(seedSource) * 43758.5453;
+          const seed = rawSeed - Math.floor(rawSeed);
+          seeds[i] = seed;
+          seeds[i + 1] = seed;
+        }
+
+        wireframeGeometry.setAttribute('segmentDirection', new THREE.BufferAttribute(directions, 3));
+        wireframeGeometry.setAttribute('segmentLength', new THREE.BufferAttribute(lengths, 1));
+        wireframeGeometry.setAttribute('segmentOffset', new THREE.BufferAttribute(offsets, 1));
+        wireframeGeometry.setAttribute('segmentSeed', new THREE.BufferAttribute(seeds, 1));
       }
       
       /**
@@ -1457,28 +1532,42 @@
         
         // Vertex shader - handles vertex positions and passes data to fragment
         const vertexShader = `
-          varying vec2 vUv;
-          varying vec3 vPosition;
-          varying vec3 vNormal;
-          
+          attribute vec3 segmentDirection;
+          attribute float segmentLength;
+          attribute float segmentOffset;
+          attribute float segmentSeed;
+
           uniform float time;
           uniform float systemState;
-          
+          uniform float flowSpeed;
+
+          varying vec3 vWorldPosition;
+          varying vec3 vSegmentDirection;
+          varying float vSegmentProgress;
+          varying float vSegmentSeed;
+
           void main() {
-            vUv = uv;
-            vPosition = position;
-            vNormal = normalize(normalMatrix * normal);
-            
-            // Add slight vertex displacement based on state
-            vec3 displaced = position;
-            float stateIntensity = systemState * 0.5;
-            float wave = sin(position.x * 10.0 + time * 2.0) * 0.01;
-            displaced += normal * wave * stateIntensity;
-            
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
+            vec3 dir = normalize(segmentDirection);
+            float safeLength = max(segmentLength, 1e-4);
+            float progress = clamp(segmentOffset / safeLength, 0.0, 1.0);
+
+            float stateIntensity = systemState * 0.35;
+            float wave = sin(progress * 12.0 + segmentSeed * 0.15 + time * flowSpeed * 1.4) * 0.005;
+            vec3 displaced = position + dir * wave * safeLength * (1.0 + stateIntensity);
+
+            vec4 localPosition = vec4(displaced, 1.0);
+            vec4 worldPosition = modelMatrix * localPosition;
+            vec4 mvPosition = modelViewMatrix * localPosition;
+
+            vWorldPosition = worldPosition.xyz;
+            vSegmentDirection = dir;
+            vSegmentProgress = progress;
+            vSegmentSeed = segmentSeed;
+
+            gl_Position = projectionMatrix * mvPosition;
           }
         `;
-        
+
         // Fragment shader - creates the energy flow effect
         const fragmentShader = `
           uniform float time;
@@ -1489,56 +1578,54 @@
           uniform vec3 colorA;
           uniform vec3 colorB;
           uniform vec3 colorC;
-          
-          varying vec2 vUv;
-          varying vec3 vPosition;
-          varying vec3 vNormal;
-          
-          // Simple noise function
-          float noise(vec2 st) {
-            return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+
+          varying vec3 vWorldPosition;
+          varying vec3 vSegmentDirection;
+          varying float vSegmentProgress;
+          varying float vSegmentSeed;
+
+          float hash(float n) {
+            return fract(sin(n) * 43758.5453123);
           }
-          
+
+          float smoothNoise(float x) {
+            float i = floor(x);
+            float f = fract(x);
+            float a = hash(i);
+            float b = hash(i + 1.0);
+            return mix(a, b, f * f * (3.0 - 2.0 * f));
+          }
+
           void main() {
-            // Create flowing energy pattern
-            float flow = sin(vPosition.y * 5.0 - time * flowSpeed) * 0.5 + 0.5;
-            flow *= sin(vPosition.x * 3.0 + time * flowSpeed * 0.7) * 0.5 + 0.5;
-            flow *= sin(vPosition.z * 4.0 - time * flowSpeed * 1.2) * 0.5 + 0.5;
-            
-            // Add noise for organic feel
-            float n = noise(vUv + time * 0.1) * 0.2;
-            flow += n;
-            
-            // Pulse based on system state
             float stateFactor = 1.0 + systemState * 0.5;
-            float pulse = sin(time * pulseSpeed * stateFactor) * 0.3 + 0.7;
-            
-            // Mix colors based on flow and state
+            float progress = vSegmentProgress + time * flowSpeed * 0.15;
+
+            float directionMod = dot(normalize(vSegmentDirection), vec3(0.36, 0.77, 0.52));
+            float travelWave = sin(progress * 6.28318 + directionMod * 4.0);
+            travelWave = travelWave * 0.5 + 0.5;
+
+            float seedOffset = vSegmentSeed * 0.001;
+            float flicker = smoothNoise(progress * 8.0 + seedOffset + time * 0.5);
+            float flow = mix(travelWave, flicker, 0.3);
+
+            float longitudinal = sin((vSegmentProgress - time * flowSpeed * 0.5) * 20.0 + seedOffset * 10.0);
+            longitudinal = longitudinal * 0.5 + 0.5;
+            longitudinal = pow(longitudinal, 1.8);
+
             vec3 color = mix(colorA, colorB, flow);
-            color = mix(color, colorC, systemState / 2.0);
-            
-            // Add rim lighting effect
-            vec3 viewDir = normalize(cameraPosition - vPosition);
-            float rim = 1.0 - max(0.0, dot(viewDir, vNormal));
-            rim = pow(rim, 2.0);
-            
-            // Combine effects
+            float heightBand = sin(vWorldPosition.y * 2.0 + time * flowSpeed * 0.7 + seedOffset * 6.0) * 0.5 + 0.5;
+            color = mix(color, colorC, heightBand * 0.35 + systemState * 0.25);
+            color += longitudinal * colorC * 0.25;
+
+            vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+            float orientation = abs(dot(viewDir, normalize(vSegmentDirection)));
+            float rim = pow(1.0 - orientation, 2.0);
+            color += rim * colorC * 0.4;
+
+            float pulse = sin(time * pulseSpeed * stateFactor + seedOffset * 12.0) * 0.25 + 0.75;
             float finalIntensity = intensity * pulse;
-            color += rim * colorC * 0.5;
-            
-            // Energy bands
-            float bands = sin(flow * 30.0) * 0.5 + 0.5;
-            bands = pow(bands, 3.0);
-            color += bands * colorB * 0.3;
-            
-            // Output with intensity
+
             gl_FragColor = vec4(color * finalIntensity, 1.0);
-            
-            // Add glow for bloom
-            float brightness = dot(color, vec3(0.299, 0.587, 0.114));
-            if (brightness > 0.5) {
-              gl_FragColor.rgb *= 1.5; // Boost bright areas for bloom
-            }
           }
         `;
         
