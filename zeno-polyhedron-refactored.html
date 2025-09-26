@@ -904,9 +904,10 @@
           directions[baseIndex] = direction.x;
           directions[baseIndex + 1] = direction.y;
           directions[baseIndex + 2] = direction.z;
-          directions[baseIndex + 3] = direction.x;
-          directions[baseIndex + 4] = direction.y;
-          directions[baseIndex + 5] = direction.z;
+          const nextBaseIndex = (i + 1) * 3;
+          directions[nextBaseIndex] = direction.x;
+          directions[nextBaseIndex + 1] = direction.y;
+          directions[nextBaseIndex + 2] = direction.z;
 
           lengths[i] = length;
           lengths[i + 1] = length;
